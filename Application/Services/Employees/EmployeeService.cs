@@ -1,119 +1,111 @@
-﻿using Application.Dtos;
+﻿using Application.ContractMapping;
+using Application.Dtos;
 using Data.Context;
-using Data.Model;
 using Microsoft.EntityFrameworkCore;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
 
-namespace Application.Services.Employees;
-
-public class EmployeeService : IEmployeeService
+namespace Application.Services.Employee
 {
-    private readonly EmployeeAppDbContext _context;
-
-    public EmployeeService(EmployeeAppDbContext context)
+    public class EmployeeService : IEmployeeService
     {
-        _context = context;
-    }
-
-    public async Task<EmployeeDto> CreateEmployeeAsync(CreateEmployeeDto dto)
-    {
-        var data = new Employee
+        public EmployeeAppDbContext _context;
+        public EmployeeService(EmployeeAppDbContext context)
         {
-            Id = Guid.NewGuid(),
-            FirstName = dto.FirstName,
-            LastName = dto.LastName,
-            Email = dto.Email,
-            HireDate = dto.HireDate,
-            Salary = dto.Salary,
-            DepartmentId = dto.DepartmentId
-        };
-
-        await _context.Employees.AddAsync(data);
-        await _context.SaveChangesAsync();
-
-        return new EmployeeDto
-        {
-            Id = data.Id,
-            FirstName = data.FirstName,
-            LastName = data.LastName,
-            Email = data.Email,
-            HireDate = data.HireDate,
-            Salary = data.Salary,
-            DepartmentId = data.DepartmentId
-        };
-    }
-
-    public async Task DeleteEmployeeAsync(Guid employeeId)
-    {
-        var employee = await _context.Employees.FindAsync(employeeId);
-
-        if (employee == null)
-        {
-            throw new KeyNotFoundException($"Employee with ID {employeeId} not found.");
+            _context = context;
         }
-
-        _context.Employees.Remove(employee);
-        await _context.SaveChangesAsync();
-    }
-
-    public async Task<EmployeesDto?> GetAllEmployeesAsync()
-    {
-        var data = await _context.Employees.Select(e => new EmployeeDto
+        public async Task<EmployeeDto> CreateEmployeeAsync(CreateEmployeeDto createEmployeeDto)
         {
-            Id = e.Id,
-            FirstName = e.FirstName,
-            LastName = e.LastName,
-            Email = e.Email,
-            HireDate = e.HireDate,
-            Salary = e.Salary,
-            DepartmentId = e.DepartmentId,
-            DepartmentName = e.Department.Name
-        }).ToListAsync();
-
-        return new EmployeesDto
-        {
-            Employees = data
-        };
-    }
-
-    public async Task<EmployeeDto?> GetEmployeeByIdAsync(Guid employeeId)
-    {
-        return await _context.Employees
-            .Where(e => e.Id == employeeId)
-            .Select(e => new EmployeeDto
+            var checkEmployee = _context.Employees.FirstOrDefault(x => x.Id == createEmployeeDto.EmployeeId);
+            if (checkEmployee is not null)
             {
-                Id = e.Id,
-                FirstName = e.FirstName,
-                LastName = e.LastName,
-                Email = e.Email,
-                HireDate = e.HireDate,
-                Salary = e.Salary,
-                DepartmentId = e.DepartmentId
-            })
-            .FirstOrDefaultAsync();
-    }
+                return null;
+            }
 
-    public Task<EmployeesDto> GetEmployeesByDepartmentIdAsync(Guid departmentId)
-    {
-        throw new NotImplementedException();
-    }
+            createEmployeeDto.EmployeeId = Guid.NewGuid();
 
-    public async Task UpdateEmployeeAsync(UpdateEmployeeDto dto)
-    {
-        var employee = await _context.Employees.FindAsync(dto.Id);
-
-        if (employee == null)
-        {
-            throw new KeyNotFoundException($"Employee with ID {dto.Id} not found.");
+            var employee = createEmployeeDto.ToModel();
+            try
+            {
+                await _context.Employees.AddAsync(employee);
+                await _context.SaveChangesAsync();
+                return employee.ToDto();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"An error occured while creating new employee {ex.Message}");
+                return new EmployeeDto();
+            }
         }
 
-        employee.FirstName = dto.FirstName;
-        employee.LastName = dto.LastName;
-        employee.Email = dto.Email;
-        employee.HireDate = dto.HireDate;
-        employee.Salary = dto.Salary;
-        employee.DepartmentId = dto.DepartmentId;
+        public async Task DeleteEmployeeAsync(Guid employeeId)
+        {
+            var employee = _context.Employees.FirstOrDefault(x => x.Id == employeeId);
+            if (employee is not null)
+            {
+                _context.Employees.Remove(employee);
+                await _context.SaveChangesAsync();
+            }
+        }
 
-        _context.Employees.Update(employee);
-        await _context.SaveChangesAsync();
+        public async Task<EmployeesDto> GetAllEmployeesAsync()
+        {
+            var employees = await _context.Employees
+                .Include(e => e.Department)
+                .ToListAsync();
+            return employees.EmployeesDto();
+        }
+
+        
+        public async Task<EmployeeDto> GetEmployeeByIdAsync(Guid employeeId)
+        {
+            var employees = await _context.Employees
+                .Include(e => e.Department)
+                .FirstOrDefaultAsync(x => x.Id == employeeId);
+            if (employees is null)
+            {
+                return null;
+            }
+            var employeeDto = new EmployeeDto()
+            {
+                Id = employees.Id,
+                FirstName = employees.FirstName,
+                LastName = employees.LastName,
+                Email = employees.Email,
+                Salary = $"{employees.Salary:N2}",
+                HireDate = employees.HireDate,
+                DepartmentName = employees.Department?.Name,
+            };
+            return employeeDto;
+        }
+
+        public async Task<EmployeeDto> UpdateEmployeeAsync(EmployeeDto employeeDto)
+        {
+            var employee = await _context.Employees.FirstOrDefaultAsync(x => x.Id == employeeDto.Id);
+            if (employee is null)
+            {
+                return null;
+            }
+
+            employee.FirstName = employeeDto.FirstName;
+            employee.LastName = employeeDto.LastName;
+            employee.Email = employeeDto.Email;
+            employee.HireDate = employeeDto.HireDate;
+            employee.Salary = decimal.Parse(employeeDto.Salary);
+            try
+            {
+                _context.Employees.Update(employee);
+                await _context.SaveChangesAsync();
+                return employee.ToDto();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"An error occurred while creating the department: {ex.Message}");
+                return new EmployeeDto();
+            }
+        }
     }
 }

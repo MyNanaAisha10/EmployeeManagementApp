@@ -1,98 +1,187 @@
 ﻿using Application.Dtos;
 using Application.Services.Department;
-using Application.Services.Employees;
+using Application.Services.Employee;
+using Data.Context;
+using Data.Model;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
-using Presentation.Models.EmployeeVM;
+using Microsoft.EntityFrameworkCore;
+using Presentation.DtoMapping;
+using Presentation.Models;
+using System.Threading.Tasks;
 
-namespace Presentation.Controllers;
-
-public class EmployeeController : BaseController
+namespace Presentation.Controllers
 {
-    private readonly IEmployeeService _employeeService;
-    private readonly IDepartmentService _departmentService;
-
-    public EmployeeController(
-        IEmployeeService employeeService,
-        IDepartmentService departmentService)
+    [Authorize]
+    public class EmployeeController : BaseController
     {
-        _employeeService = employeeService;
-        _departmentService = departmentService;
-    }
+        private readonly IEmployeeService _employeeService;
+        private readonly IDepartmentService _departmentService;
+        private readonly EmployeeAppDbContext _context;
 
-    public async Task<IActionResult> Index()
-    {
-        var employees = await _employeeService.GetAllEmployeesAsync();
-
-        var model = new EmployeesViewModel
+        public EmployeeController(IEmployeeService employeeService, IDepartmentService departmentService, EmployeeAppDbContext context)
         {
-            Employees = employees?.Employees.Select(e => new EmployeeViewModel
+            _employeeService = employeeService;
+            _departmentService = departmentService;
+            _context = context;
+        }
+        public async Task<IActionResult> Index()
+        {
+            var employees = await _employeeService.GetAllEmployeesAsync();
+
+            if (employees is null)
             {
-                Id = e.Id,
-                FirstName = e.FirstName,
-                LastName = e.LastName,
-                Email = e.Email,
-                Department = e.DepartmentName
-            }).ToList()!
-        };
-
-        return View(model);
-    }
-
-    public async Task<IActionResult> Create()
-    {
-        var model = new CreateEmployeeViewModel
+                return View(employees);
+            }
+            var viewModel = employees.ToViewModel();
+            return View(viewModel);
+        }
+        [HttpGet]
+        public async Task<IActionResult> Create(Guid departmentId)
         {
-            HireDate = DateTime.Today,
-            Departments = await GetDepartmentSelectList()
-        };
+            var viewModel = new CreateEmployeeViewModel()
+            {
+                HireDate = DateTime.Today,
+                DepartmentId = departmentId
+            };
 
-        return View(model);
-    }
-
-    [HttpPost]
-    public async Task<IActionResult> Create(CreateEmployeeViewModel model)
-    {
-        if (!ModelState.IsValid)
+            await PopulateDepartmentDropdown(viewModel);
+            return View(viewModel);
+        }
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> Create(CreateEmployeeViewModel viewModel)
         {
-            model.HireDate = DateTime.Today;
-            model.Departments = await GetDepartmentSelectList();
-            return View(model);
+            if (!ModelState.IsValid)
+            {
+                SetFlashMessage("Invalid input, please check all fields are correctly filled", "error");
+
+                await PopulateDepartmentDropdown(viewModel);
+                return View(viewModel);
+            }
+
+            var employeeModel = new CreateEmployeeDto()
+            {
+                EmployeeId = viewModel.Id,
+                FirstName = viewModel.FirstName,
+                LastName = viewModel.LastName,
+                Email = viewModel.Email,
+                Salary = viewModel.Salary,
+                HireDate = viewModel.HireDate,
+                DepartmentId = viewModel.DepartmentId,
+            };
+            
+            var result = await _employeeService.CreateEmployeeAsync(employeeModel);
+            if (result is null)
+            {
+                SetFlashMessage("An error occurred while creating the employee. Please check if there's any problem or employee already exist and try again.", "error");
+                await PopulateDepartmentDropdown(viewModel);
+                return View(viewModel);
+            }
+            
+            SetFlashMessage("Employee created successfully!", "success");
+            var allEmployees = await _employeeService.GetAllEmployeesAsync();
+            return RedirectToAction("Index");
         }
 
-        var dto = new CreateEmployeeDto
+        private async Task PopulateDepartmentDropdown(CreateEmployeeViewModel viewModel)
         {
-            FirstName = model.FirstName,
-            LastName = model.LastName,
-            Email = model.Email,
-            HireDate = model.HireDate,
-            Salary = model.Salary,
-            DepartmentId = model.DepartmentId
-        };
+            var departments = await _context.Departments.ToListAsync();
 
-        var response = await _employeeService.CreateEmployeeAsync(dto);
-
-        if (response == null)
-        {
-            SetFlashMessage("Failed to create employee.", "error");
-            model.HireDate = DateTime.Today;
-            model.Departments = await GetDepartmentSelectList();
-            return View(model);
+            viewModel.DepartmentSelectList = departments.Select(d => new SelectListItem
+            {
+                Value = d.Id.ToString(),
+                Text = d.Name
+            }).ToList();
         }
 
-        SetFlashMessage("Employee created successfully.", "success");
-
-        return RedirectToAction(nameof(Index));
-    }
-
-    private async Task<IEnumerable<SelectListItem>> GetDepartmentSelectList()
-    {
-        var data = await _departmentService.GetAllDepartmentsAsync();
-
-        return data.Departments.Select(d => new SelectListItem
+        [HttpGet]
+        public async Task<IActionResult> Update(Guid employeeId)
         {
-            Value = d.Id.ToString(),
-            Text = d.Name
-        });
+            var employee = await _employeeService.GetEmployeeByIdAsync(employeeId);
+            if (employee is null)
+            {
+                TempData["Message"] = "Employee not found!";
+                return RedirectToAction("Index");
+            }
+
+            var employeeDto = new UpdateEmployeeModel()
+            {
+                EmployeeId = employee.Id,
+                DepartmentId = employee.DepartmentId,
+                FirstName = employee.FirstName,
+                LastName = employee.LastName,
+                Email = employee.Email,
+                Salary = $"{employee.Salary:N2}",
+                HireDate = employee.HireDate,
+            };
+            return View(employeeDto);
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> Update(UpdateEmployeeModel updateEmployeeModel)
+        {
+            if (!ModelState.IsValid)
+            {
+                SetFlashMessage("Invalid input detected! Check again", "error");
+                return View(updateEmployeeModel);
+            }
+            var employee = await _employeeService.GetEmployeeByIdAsync(updateEmployeeModel.EmployeeId);
+            if (employee is null)
+            {
+                SetFlashMessage("Employee not found!", "error");
+                return View(updateEmployeeModel);
+            }
+
+            var employeeDto = new EmployeeDto()
+            {
+                Id = updateEmployeeModel.EmployeeId,
+                FirstName = updateEmployeeModel.FirstName,
+                LastName = updateEmployeeModel.LastName,
+                Email = updateEmployeeModel.Email,
+                Salary = updateEmployeeModel.Salary,
+                HireDate = updateEmployeeModel.HireDate
+            };
+
+            var result = await _employeeService.UpdateEmployeeAsync(employeeDto);
+            if (result is null)
+            {
+                TempData["Message"] = "Failed to update employee details!";
+                return View(updateEmployeeModel);
+            }
+
+            TempData["Message"] = "Successfully updated employee details!";
+            return RedirectToAction("Index");
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> Delete(Guid employeeId)
+        {
+            var allEmployees = await _employeeService.GetAllEmployeesAsync();
+            try
+            {
+                var employee = _employeeService.DeleteEmployeeAsync(employeeId);
+                TempData["Message"] = "Employee deleted successfully!";
+                return RedirectToAction("Index");
+            }
+            catch
+            {
+                return View(allEmployees);
+            }
+        }
+
+        public async Task<IActionResult> Detail(Guid employeeId)
+        {
+            var employees = await _employeeService.GetEmployeeByIdAsync(employeeId);
+            if (employees == null)
+            {
+                SetFlashMessage("Unable to view employee!", "error");
+                return RedirectToAction("Index");
+            }
+
+            var employeeModel = employees.ToViewModel();
+            return View(employeeModel);
+        }
     }
 }

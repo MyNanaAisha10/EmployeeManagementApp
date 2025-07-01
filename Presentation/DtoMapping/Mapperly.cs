@@ -5,6 +5,20 @@ namespace Presentation.DtoMapping;
 
 public static class Mapperly
 {
+    public static EmployeeViewModel ToViewModel(this EmployeeDto dto)
+    {
+        return new EmployeeViewModel()
+        {
+            Id = dto.Id,
+            FirstName = dto.FirstName,
+            LastName = dto.LastName,
+            Email = dto.Email,
+            HireDate = dto.HireDate,
+            Salary = decimal.Parse(dto.Salary),
+            DepartmentId = dto.DepartmentId,
+            DepartmentName = dto.DepartmentName ?? string.Empty
+        };
+    }
     // DepartmentViewModel <-> DepartmentDto
     public static DepartmentViewModel ToViewModel(this DepartmentDto dto)
     {
@@ -13,28 +27,42 @@ public static class Mapperly
             Id = dto.Id,
             Name = dto.Name,
             Description = dto.Description,
-            EmployeeCount = dto.EmployeeCount,
-            Employees = dto.Employees.Select(e => new DepartmentEmployeeViewModel
-            {
-                Id = e.Id,
-                FirstName = e.FirstName,
-                LastName = e.LastName,
-                Email = e.Email
-            }).ToList()
+            Employees = dto.Employees?
+            .Select(e => e.ToViewModel()).ToList() ?? new List<EmployeeViewModel>()
         };
     }
+    public static EmployeeDto ToDto(this EmployeeViewModel model)
+    {
+        return new EmployeeDto()
+        {
+            Id = model.Id,
 
-    public static DepartmentDto ToDto(this DepartmentViewModel vm)
+            FirstName = model.FirstName,
+            LastName = model.LastName,
+            Email = model.Email,
+            Salary = $"{model.Salary:N2}",
+            HireDate = model.HireDate,
+            DepartmentId = model.DepartmentId,
+        };
+    }
+    public static DepartmentDto ToDto(this DepartmentViewModel viewModel)
     {
         return new DepartmentDto()
         {
-            Id = vm.Id,
-            Name = vm.Name,
-            Description = vm.Description,
+            Id = viewModel.Id,
+            Name = viewModel.Name,
+            Description = viewModel.Description,
             Employees = []
         };
     }
 
+    public static EmployeesViewModel ToViewModel(this EmployeesDto dto)
+    {
+        return new EmployeesViewModel()
+        {
+            Employees = dto.Employees.Select(x => x.ToViewModel()).ToList()
+        };
+    }
     // DepartmentsViewModel <-> DepartmentsDto
     public static DepartmentsViewModel ToViewModel(this DepartmentsDto dto)
     {
@@ -44,41 +72,18 @@ public static class Mapperly
         };
     }
 
-    public static DepartmentsDto ToDto(this DepartmentsViewModel vm)
+    public static EmployeesDto ToDto(this EmployeesViewModel viewModel)
+    {
+        return new EmployeesDto()
+        {
+            Employees = viewModel.Employees.Select(x => x.ToDto()).ToList()
+        };
+    }
+    public static DepartmentsDto ToDto(this DepartmentsViewModel viewModel)
     {
         return new DepartmentsDto()
         {
-            Departments = vm.Departments.Select(d => d.ToDto()).ToList()
-        };
-    }
-
-    public static UpdateDepartmentViewModel ToViewModel(this UpdateDepartmentDto dto)
-    {
-        return new UpdateDepartmentViewModel()
-        {
-            Id = dto.Id,
-            Name = dto.Name,
-            Description = dto.Description
-        };
-    }
-
-    public static UpdateDepartmentViewModel ToUpdateDepartmentViewModel(this DepartmentDto dto)
-    {
-        return new UpdateDepartmentViewModel()
-        {
-            Id = dto.Id,
-            Name = dto.Name,
-            Description = dto.Description
-        };
-    }
-
-    public static UpdateDepartmentDto ToDto(this UpdateDepartmentViewModel vm)
-    {
-        return new UpdateDepartmentDto()
-        {
-            Id = vm.Id,
-            Name = vm.Name,
-            Description = vm.Description
+            Departments = viewModel.Departments.Select(d => d.ToDto()).ToList()
         };
     }
 }

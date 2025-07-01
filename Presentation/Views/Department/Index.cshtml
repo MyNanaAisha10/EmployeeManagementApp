@@ -8,7 +8,7 @@
 <a asp-action="Create" class="btn btn-outline-success">Create New Department</a>
 <hr>
 
-@if (!Model.Departments.Any())
+@if (Model is null)
 {
     <p class="text-danger">No records available!</p>
 }

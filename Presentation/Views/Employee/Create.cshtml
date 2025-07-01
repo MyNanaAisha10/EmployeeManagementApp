@@ -1,14 +1,15 @@
-﻿@using Presentation.Models.EmployeeVM
+﻿@model CreateEmployeeViewModel
 @{
-    ViewData["Title"] = "Create An Employee";
+        ViewData["Title"] = "Create An Employee";
 }
-@model CreateEmployeeViewModel
+
 
 <h1>@ViewData["Title"]</h1>
 <hr>
 
 <form asp-action="Create" method="post">
 
+    <input type="hidden" asp-for="Id" class="form-control" />
     <div class="row">
         <div class="mb-3 col-md-4">
             <label asp-for="FirstName" class="form-label"></label>
@@ -32,8 +33,8 @@
     <div class="row">
 
         <div class="mb-3 col-md-6">
-            <label asp-for="DepartmentId" class="form-label"></label>
-            <select asp-for="DepartmentId" class="form-select" asp-items="Model.Departments">
+            <label asp-for="DepartmentId" class="form-label">Department</label>
+            <select asp-for="DepartmentId" class="form-select" asp-items="Model.DepartmentSelectList">
                 <option value="">Select a Department</option>
             </select>
             <span asp-validation-for="DepartmentId" class="text-danger"></span>
@@ -54,3 +55,6 @@
 
     <button type="submit" class="btn btn-primary">Create Record</button>
 </form>
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

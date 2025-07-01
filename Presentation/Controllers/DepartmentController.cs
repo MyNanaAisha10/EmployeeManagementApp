@@ -1,11 +1,13 @@
 ﻿using Application.Dtos;
 using Application.Services.Department;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Presentation.DtoMapping;
 using Presentation.Models;
 
 namespace Presentation.Controllers;
 
+[Authorize]
 public class DepartmentController : BaseController
 {
     private readonly IDepartmentService _departmentService;
@@ -19,22 +21,12 @@ public class DepartmentController : BaseController
     {
         var departments = await _departmentService.GetAllDepartmentsAsync();
 
-        var viewModel = departments.ToViewModel();
-
-        return View(viewModel);
-    }
-
-    public async Task<IActionResult> Details(Guid id)
-    {
-        var response = await _departmentService.GetDepartmentByIdAsync(id);
-
-        if (response == null)
+        if (departments is null)
         {
-            SetFlashMessage("Department not found.", "error");
-            return RedirectToAction(nameof(Index));
+            return View(departments);
         }
 
-        var viewModel = response.ToViewModel();
+        var viewModel = departments.ToViewModel();
 
         return View(viewModel);
     }
@@ -50,6 +42,7 @@ public class DepartmentController : BaseController
     {
         if (!ModelState.IsValid)
         {
+            SetFlashMessage("Please fill in all required fields correctly.", "error");
             return View(model);
         }
 
@@ -59,12 +52,10 @@ public class DepartmentController : BaseController
             Name = model.Name,
             Description = model.Description
         };
-
         var result = await _departmentService.CreateDepartmentAsync(viewModel);
-
         if (result == null)
         {
-            SetFlashMessage("An error occurred while creating the department. Please try again.", "error");
+            SetFlashMessage("An error occurred while creating the department. Please check if there's any problem or department already exist and try again.", "error");
             return View(model);
         }
 
@@ -73,52 +64,79 @@ public class DepartmentController : BaseController
         return RedirectToAction(nameof(Index));
     }
 
-    public async Task<IActionResult> Edit(Guid id)
+    [HttpGet]
+    public async Task<ActionResult> Edit(Guid id)
+    {
+        var department = await _departmentService.GetDepartmentByIdAsync(id);
+        if (department is null)
+        {
+            TempData["ErrorMessage"] = "Department not found";
+            return Redirect("Index");
+        }
+        var departmentDTO = new UpdateDepartmentViewModel()
+        {
+            Name = department.Name,
+            Description = department.Description,
+        };
+        ViewData["Title"] = "Edit Department Record";
+        return View(departmentDTO);
+    }
+
+    [HttpPost]
+    public async Task<ActionResult> Edit([FromRoute] Guid id, UpdateDepartmentViewModel updateModel)
     {
         if (!ModelState.IsValid)
         {
-            return View();
+            TempData["ErrorMessage"] = "Please fill all fields correctly";
+            return View(updateModel);
         }
-
-        var department = await _departmentService.GetDepartmentByIdAsync(id);
-
-        if (department == null)
+        var departmentDTO = new DepartmentDto()
         {
-            SetFlashMessage("Department not found.", "error");
-            return RedirectToAction(nameof(Index));
+            Id = id,
+            Name = updateModel.Name,
+            Description = updateModel.Description,
+        };
+
+        var result = await _departmentService.UpdateDepartmentAsync(departmentDTO);
+        if (result is null)
+        {
+            TempData["ErrorMessage"] = "Failed to update department!!";
+            return View(updateModel);
         }
 
-        var viewModel = department.ToUpdateDepartmentViewModel();
+        TempData["ErrorMessage"] = "Department updated successfully";
+        return RedirectToAction("Index");
+    }
 
+    [HttpGet]
+    public async Task<IActionResult> Detail(Guid departmentId)
+    {
+        var employees = await _departmentService.GetDepartmentByIdAsync(departmentId);
+        if (employees == null)
+        {
+            TempData["Message"] = $"Department does not have employees yet!";
+            return RedirectToAction("Index");
+            //return View(new DepartmentViewModel());
+            //return View();
+        }
+
+        var viewModel = employees.ToViewModel();
         return View(viewModel);
     }
-
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Edit(int id, UpdateDepartmentViewModel model)
+    public async Task<ActionResult> Delete(Guid id)
     {
-        var updateDepartment = model.ToDto();
-
-        var response = await _departmentService.UpdateDepartmentAsync(updateDepartment);
-
-        if (response == null)
+        var allDepartments = await _departmentService.GetAllDepartmentsAsync();
+        try
         {
-            SetFlashMessage("An error occurred while updating the department. Please try again.", "error");
-            return View(model);
+            var department = _departmentService.DeleteDepartmentAsync(id);
+            TempData["Message"] = "Department deleted successfully!";
+            return RedirectToAction("Index");
         }
-
-        SetFlashMessage("Department updated successfully.", "success");
-        return RedirectToAction(nameof(Index));
-    }
-
-
-    [HttpPost]
-    [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Delete(Guid id)
-    {
-        await _departmentService.DeleteDepartmentAsync(id);
-        SetFlashMessage("Department deleted successfully.", "success");
-
-        return RedirectToAction(nameof(Index));
+        catch
+        {
+            return View(allDepartments);
+        }
     }
 }

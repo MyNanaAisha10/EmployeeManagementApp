@@ -1,15 +1,15 @@
-﻿@using Presentation.Models.EmployeeVM
+﻿@model EmployeesViewModel
 @{
     ViewData["Title"] = "Employee List";
 }
-@model EmployeesViewModel
+
 
 <h1>@ViewData["Title"]</h1>
 
 <a asp-action="Create" class="btn btn-outline-success">Create New Employee</a>
 <hr>
 
-@if (!Model.Employees.Any())
+@if (Model is null)
 {
     <h5 class="text-danger">No records available!</h5>
 }

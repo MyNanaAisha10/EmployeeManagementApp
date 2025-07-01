@@ -1,7 +1,11 @@
 ﻿using Application.ContractMapping;
 using Application.Dtos;
 using Data.Context;
+using Humanizer;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Internal;
+//using MySqlX.XDevAPI.Common;
+using static Microsoft.EntityFrameworkCore.DbLoggerCategory;
 
 namespace Application.Services.Department;
 
@@ -22,7 +26,11 @@ public class DepartmentService : IDepartmentService
             Name = dto.Name,
             Description = dto.Description
         };
-
+        var checkDepartment = _context.Departments.FirstOrDefault(x => x.Name.ToLower() == dto.Name.ToLower());
+        if (checkDepartment is not null)
+        {
+            return null;
+        }
         var department = data.ToModel();
 
         try
@@ -32,88 +40,77 @@ public class DepartmentService : IDepartmentService
 
             return department.ToDto();
         }
-        catch(Exception ex)
+        catch (Exception ex)
         {
-            Console.WriteLine("An error occurred while creating the department.", ex);
+            Console.WriteLine($"An error occurred while creating the department {ex.Message}.");
             return new DepartmentDto();
         }
     }
 
     public async Task DeleteDepartmentAsync(Guid departmentId)
     {
-        try
+        var department = _context.Departments.FirstOrDefault(x => x.Id == departmentId);
+        if (department is not null)
         {
-            var department = await _context.Departments.FindAsync(departmentId);
-
-            if (department == null)
-            {
-                throw new KeyNotFoundException($"Department with ID {departmentId} not found.");
-            }
-
             _context.Departments.Remove(department);
             await _context.SaveChangesAsync();
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine("An error occurred while deleting the department.", ex);
         }
     }
 
     public async Task<DepartmentsDto> GetAllDepartmentsAsync()
     {
-        var departments = await _context.Departments
-                            .Include(x => x.Employees)
-                            .ToListAsync();
+        var departments = await _context.Departments.ToListAsync();
 
         return departments.DepartmentsDto();
     }
 
-    public async Task<DepartmentDto?> GetDepartmentByIdAsync(Guid departmentId)
+    public async Task<DepartmentDto> GetDepartmentByIdAsync(Guid departmentId)
     {
+        //var department = await _context.Departments.FirstOrDefaultAsync(x => x.Id == departmentId);
         var department = await _context.Departments
-            .Where(d => d.Id == departmentId)
-            .Select(d => new DepartmentDto
+            .Include(y => y.Employees)
+            .FirstOrDefaultAsync(x => x.Id == departmentId);
+        if (department is null)
+        {
+            return null;
+        }
+        return new DepartmentDto()
+        {
+            Id = department.Id,
+            Name = department.Name,
+            Description = department.Description,
+            Employees = department.Employees.Select(x => new EmployeeDto
             {
-                Id = d.Id,
-                Name = d.Name,
-                Description = d.Description,
-                Employees = d.Employees.Select(e => new EmployeeDto
-                {
-                    Id = e.Id,
-                    FirstName = e.FirstName,
-                    LastName = e.LastName,
-                    Email = e.Email
-                }).ToList(),
-                EmployeeCount = d.Employees.Count
-            })
-            .FirstOrDefaultAsync();
-
-        return department;
+                Id = x.Id,
+                FirstName = x.FirstName,
+                LastName = x.LastName,
+                Email = x.Email,
+                HireDate = x.HireDate,
+                Salary = $"{x.Salary:N2}"
+            }).ToList()
+        };
     }
 
-    public async Task<UpdateDepartmentDto> UpdateDepartmentAsync(UpdateDepartmentDto departmentDto)
+    public async Task<DepartmentDto> UpdateDepartmentAsync(DepartmentDto departmentDto)
     {
+        var department = await _context.Departments.FirstOrDefaultAsync(x => x.Id == departmentDto.Id);
+        if (department is null)
+        {
+            return null;
+        }
+        department.Name = departmentDto.Name;
+        department.Description = departmentDto.Description;
+
         try
         {
-            var department = await _context.Departments.FindAsync(departmentDto.Id);
-
-            if (department == null)
-            {
-                throw new KeyNotFoundException($"Department with ID {departmentDto.Id} not found.");
-            }
-
-            department.Name = departmentDto.Name;
-            department.Description = departmentDto.Description;
-
             _context.Departments.Update(department);
             await _context.SaveChangesAsync();
-
-            return department.ToUpdateDto();
+            return department.ToDto();
         }
         catch (Exception ex)
         {
-            Console.WriteLine("An error occurred while updating the department.", ex);
-            return new UpdateDepartmentDto();
+            Console.WriteLine($"An error occurred while creating the department: {ex.Message}");
+            return new DepartmentDto();
         }
     }
 }

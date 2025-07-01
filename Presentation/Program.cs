@@ -3,6 +3,7 @@ using Data.Context;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using MySql.EntityFrameworkCore.Extensions;
+using System.Configuration;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -30,6 +31,7 @@ builder.Services.AddMySQLServer<EmployeeAppDbContext>(
     builder.Configuration.GetConnectionString("DefaultConnection")!);
 
 builder.Services.AddServices();
+
 
 var app = builder.Build();
 

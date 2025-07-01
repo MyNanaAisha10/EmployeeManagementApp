@@ -1,4 +1,6 @@
-﻿namespace Presentation.Models;
+﻿using Presentation.Models;
+
+namespace Presentation.Models;
 
 public class DepartmentViewModel
 {
@@ -6,15 +8,7 @@ public class DepartmentViewModel
     public string Name { get; set; } = default!;
     public string? Description { get; set; }
     public int EmployeeCount { get; set; }
-    public List<DepartmentEmployeeViewModel> Employees { get; set; } = default!;
-}
-
-public  class DepartmentEmployeeViewModel
-{
-    public Guid Id { get; set; }
-    public string FirstName { get; set; } = default!;
-    public string LastName { get; set; } = default!;
-    public string Email { get; set; } = default!;
+    public IEnumerable<EmployeeViewModel> Employees { get; set; } = default!;
 }
 
 public class DepartmentsViewModel
